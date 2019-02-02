@@ -84,7 +84,7 @@ def filterNumerical(data,features):
 
 	return dic
 
-def prob_numerical(dic,features):
+def summary_numerical(dic,features):
 	dic_prob={}
 
 	for f in features:
@@ -95,9 +95,9 @@ def prob_numerical(dic,features):
 		pos_mean = mean(pos_list)
 		pos_stdev= stdev(pos_list,pos_mean)
 		
-		print("feature = ",f)
-		print("mean= ",pos_mean)
-		print("stdev= ",pos_stdev)
+		# print("feature = ",f)
+		# print("mean= ",pos_mean)
+		# print("stdev= ",pos_stdev)
 		dic_prob[f][true] = {'mean':pos_mean,'stdev':pos_stdev}
 
 		neg_mean= mean(neg_list)
@@ -107,6 +107,18 @@ def prob_numerical(dic,features):
 
 
 	return dic_prob
+
+
+
+def gaussian(x,mean,stdev):
+	e= - (pow((x-mean),2) / (2*pow(stdev,2)))
+
+	exp= math.exp(e)
+
+	prob = (1/(math.sqrt(2*math.pi) * stdev)) * exp
+
+	return prob
+	
 
 
 
@@ -144,7 +156,70 @@ def prob_cat(dic,features,cat_uniq):
 
 
 
+def cond_prob(y,x,cols,categorical,numerical,cat_prob,num_summary,train_len):
 
+	if(y==true):
+		prob_label = prob(train_len[0],train_len[0]+train_len[1])
+
+	if(y==false):
+		prob_label = prob(train_len[1],train_len[0]+train_len[1])
+
+
+	prob_final = prob_label
+	for count,i in enumerate(cols):
+
+		if(i in categorical):
+			prob_final = prob_final * cat_prob[i][x[count]][y]
+
+		if(i in numerical):
+			mean = num_summary[i][y]['mean']
+			stdev = num_summary[i][y]['stdev']
+
+			prob_final = prob_final * gaussian(x[count],mean,stdev)
+
+	return prob_final
+
+
+
+
+
+
+
+
+
+def predict(x,cat_prob,num_summary,categorical,numerical,train_len):
+
+	y_predict=[]
+	cols= x.columns
+	for row in x.itertuples():
+		r= [i for i in row]
+		r.pop(0)
+		prob_yes= cond_prob(true,r,cols,categorical,numerical,cat_prob,num_summary,train_len)
+		prob_no= cond_prob(false,r,cols,categorical,numerical,cat_prob,num_summary,train_len)
+
+		if(prob_yes>prob_no):
+			pred_val= true
+		else:
+			pred_val= false
+
+		y_predict.append(pred_val)
+
+
+	return y_predict
+
+
+
+def accuracy(ytest,ypredict):
+	c=0
+	l =len(ytest)
+
+	for count,i in enumerate(ytest):
+		if(ytest[count] == ypredict[count]):
+			c= c +1
+	# print("count= ",c)
+	# print("total= ",l)
+
+	return c/l
 
 
 
@@ -173,24 +248,35 @@ for i in categorical:
 l= [xTrain,yTrain]
 data_train=pd.concat(l,axis=1)
 
-print("categorical")
+# print("categorical")
 cat_dic=filterCategorical(data_train,categorical,cat_uniq)
-print(cat_dic)
-print("\n\n\n\n\nnumerical")
+# print(cat_dic)
+# print("\n\n\n\n\nnumerical")
 num_dic=filterNumerical(data_train,numerical)
-print(num_dic)
+# print(num_dic)
 
-print("\n\ncat prob")
-print(prob_cat(cat_dic,categorical,cat_uniq))
+# print("\n\ncat prob")
+cat_prob=prob_cat(cat_dic,categorical,cat_uniq)
+# print(cat_prob)
+# print("accepted prob=  ",cat_prob['accepted'])
 
-print("\n\n\nnum prob")
-print(prob_numerical(num_dic,numerical))
+# print("\n\n\nnum prob")
+num_summary=summary_numerical(num_dic,numerical)
+# print(num_summary)
 
 
 # print("true")
-# print(len(data_train.loc[data_train[label]==true]))
+true_len=len(data_train.loc[data_train[label]==true])
 # print("false")
-# print(len(data_train.loc[data_train[label]==false]))
+false_len=len(data_train.loc[data_train[label]==false])
+train_len= [true_len,false_len]
+
+y_predict=predict(xTest,cat_prob,num_summary,categorical,numerical,train_len)
+
+yTest= yTest.tolist()
+
+print("accuracy= ",accuracy(yTest,y_predict)*100)
+
 
 
 
